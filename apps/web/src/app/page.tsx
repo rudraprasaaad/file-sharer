@@ -5,9 +5,13 @@ export default async function Home() {
     .catch(() => null);
 
   return (
-    <main>
-      <h1>File Sharer</h1>
-      <p>API: {status?.ok ? "connected" : "unreachable"}</p>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-gradient-to-b from-slate-900 to-slate-800 p-8">
+      <h1 className="text-5xl font-bold text-white">File Sharer</h1>
+      <p
+        className={`text-lg font-medium ${status?.ok ? "text-green-400" : "text-red-400"}`}
+      >
+        API: {status?.ok ? "✓ connected" : "✗ unreachable"}
+      </p>
     </main>
   );
 }
