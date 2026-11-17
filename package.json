@@ -1,0 +1,16 @@
+{
+  "name": "file-sharer",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun run --parallel dev:api dev:web",
+    "dev:api": "bun run --filter @file-sharer/api dev",
+    "dev:web": "bun run --filter @file-sharer/web dev",
+    "build": "bun run --filter '*' build",
+    "typecheck": "bun run --filter '*' typecheck",
+    "db:generate": "bun run --filter @file-sharer/db generate",
+    "db:migrate": "bun run --filter @file-sharer/db migrate",
+    "db:push": "bun run --filter @file-sharer/db push",
+    "db:studio": "bun run --filter @file-sharer/db studio"
+  }
+}
