@@ -12,5 +12,8 @@
     "db:migrate": "bun run --filter @file-sharer/db migrate",
     "db:push": "bun run --filter @file-sharer/db push",
     "db:studio": "bun run --filter @file-sharer/db studio"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.10"
   }
 }
