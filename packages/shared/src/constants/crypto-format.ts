@@ -1,0 +1,3 @@
+export const IV_BYTES = 12;
+export const AUTH_TAG_BYTES = 16;
+export const ENCRYPTION_OVERHEAD_PER_CHUNK = IV_BYTES + AUTH_TAG_BYTES;
