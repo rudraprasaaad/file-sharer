@@ -1,6 +1,7 @@
 import {
   bigint,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -17,7 +18,8 @@ export const files = pgTable(
       .references(() => transfers.id, {
         onDelete: "cascade",
       }),
-    r2Key: text("r2_key").notNull().unique(),
+    r2Prefix: text("r2_prefix").notNull().unique(),
+    chunkCount: integer("chunk_count").notNull(),
     encryptedMetadata: text("encrypted_metadata").notNull(),
     sizeBytes: bigint("size_bytes", {
       mode: "number",
