@@ -13,7 +13,7 @@ export interface Transfer {
   readonly status: TransferStatus;
   readonly passwordHash: string | null;
   readonly chunkSize: number;
-  readonly createAt: Date;
+  readonly createdAt: Date;
   readonly expiresAt: Date;
   readonly files: readonly TransferFile[];
 }
