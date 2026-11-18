@@ -18,6 +18,11 @@ export interface CreateTransferResult {
   }[];
 }
 
+export interface CompleteTransferResult {
+  readonly transferId: string;
+  readonly expiresAt: Date;
+}
+
 export class TransferService {
   constructor(
     private readonly repository: TransferRepository,
