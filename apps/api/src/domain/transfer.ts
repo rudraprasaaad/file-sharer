@@ -2,7 +2,8 @@ export type TransferStatus = "pending" | "active" | "expired";
 
 export interface TransferFile {
   readonly id: string;
-  readonly r2Key: string;
+  readonly r2Prefix: string;
+  readonly chunkCount: number;
   readonly encryptedMetadata: string;
   readonly sizeBytes: number;
 }
