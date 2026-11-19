@@ -8,4 +8,6 @@ export interface TransferRepository {
   findExpired(now: Date): Promise<Transfer[]>;
 
   delete(id: string): Promise<void>;
+
+  markActive(id: string): Promise<boolean>;
 }
