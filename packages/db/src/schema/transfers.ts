@@ -30,9 +30,7 @@ export const transfers = pgTable(
       withTimezone: true,
     }).notNull(),
   },
-  (table) => [
-    index("transfers_status_expires_at_idx").on(table.status, table.expiresAt),
-  ],
+  (table) => [index("transfers_status_expires_at_idx").on(table.expiresAt)],
 );
 
 export type TransferRow = typeof transfers.$inferSelect;
