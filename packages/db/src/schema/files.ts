@@ -32,3 +32,6 @@ export const files = pgTable(
   },
   (table) => [index("files_transfer_id_idx").on(table.transferId)],
 );
+
+export type FileRow = typeof files.$inferSelect;
+export type NewFileRow = typeof files.$inferInsert;
