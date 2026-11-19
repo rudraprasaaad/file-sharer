@@ -5,7 +5,16 @@ import { PasswordHasher } from "../interfaces/password-hasher";
 import { TransferRepository } from "../interfaces/transfer-repository";
 import { UploadUrlSigner } from "../interfaces/upload-url-signer";
 import { TransferFile } from "../domain/transfer";
-import { chunkKeys, filePrefix } from "../domain/chunk-key";
+import { chunkKey, chunkKeys, filePrefix } from "../domain/chunk-key";
+import {
+  TransferExpiredError,
+  TransferNotFoundError,
+  TransferStateConflictError,
+  UploadIncompleteError,
+} from "../domain/errors";
+import { isExpired } from "../domain/is-expired";
+import { ObjectInspector } from "../interfaces/object-inspector";
+import { expectedChunkSizes } from "../domain/expected-chunk-sizes";
 
 const UPLOAD_URL_TTL_SECONDS = 6 * 60 * 60;
 
@@ -30,6 +39,7 @@ export class TransferService {
     private readonly passwordHasher: PasswordHasher,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
+    private readonly objectInspector: ObjectInspector,
   ) {}
 
   async create(input: CreateTransferInput): Promise<CreateTransferResult> {
@@ -82,5 +92,86 @@ export class TransferService {
       expiresAt,
       files: signedFiles,
     };
+  }
+
+  async complete(transferId: string): Promise<CompleteTransferResult> {
+    const transfer = await this.repository.findById(transferId);
+
+    if (transfer === null) throw new TransferNotFoundError(transferId);
+
+    if (
+      transfer.status === "expired" ||
+      isExpired(transfer, this.clock.now())
+    ) {
+      throw new TransferExpiredError(transferId);
+    }
+
+    if (transfer.status === "active") {
+      return {
+        transferId,
+        expiresAt: transfer.expiresAt,
+      };
+    }
+    await Promise.all(
+      transfer?.files.map((file) =>
+        this.assertFileFullyUploaded(file, transfer.chunkSize),
+      ),
+    );
+
+    const activated = await this.repository.markActive(transferId);
+
+    if (!activated) {
+      const current = await this.repository.findById(transferId);
+      if (current?.status === "active") {
+        return {
+          transferId,
+          expiresAt: current.expiresAt,
+        };
+      }
+      throw new TransferStateConflictError(transferId);
+    }
+
+    return {
+      transferId,
+      expiresAt: transfer.expiresAt,
+    };
+  }
+
+  private async assertFileFullyUploaded(
+    file: TransferFile,
+    chunkSize: number,
+  ): Promise<void> {
+    const stored = await this.objectInspector.listSizes(file.r2Prefix);
+    const expectedSizes = expectedChunkSizes(file, chunkSize);
+    const problems: string[] = [];
+
+    expectedSizes.forEach((expectedSize, index) => {
+      const actual = stored.get(chunkKey(file.r2Prefix, index));
+      if (actual === undefined) {
+        problems.push(`chunk ${index} is missing`);
+      } else if (actual !== expectedSize) {
+        problems.push(
+          `chunk ${index} has ${actual} bytes, expected ${expectedSize}`,
+        );
+      }
+    });
+
+    const expectedKeys = new Set(chunkKeys(file.r2Prefix, file.chunkCount));
+    const unexpected = [...stored.keys()].filter(
+      (key) => !expectedKeys.has(key),
+    );
+
+    if (unexpected.length > 0) {
+      problems.push(`${unexpected.length} unexpected object(s) in storage`);
+    }
+
+    if (problems.length > 0) {
+      const shown = problems.slice(0, 10);
+      if (problems.length > shown.length) {
+        shown.push(`...and ${problems.length - shown.length} more`);
+      }
+
+      throw new UploadIncompleteError(file.id, shown);
+    }
   }
 }
