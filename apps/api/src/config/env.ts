@@ -8,6 +8,10 @@ const envSchema = z.object({
   R2_BUCKET_NAME: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(4000),
   WEB_ORIGIN: z.url().default("http://localhost:3000"),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
 export type Env = z.infer<typeof envSchema>;
