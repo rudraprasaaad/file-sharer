@@ -8,7 +8,7 @@ const createTransferFileSchema = z.object({
   chunkCount: z.number().int().min(1).max(LIMITS.maxChunksPerFile),
 });
 
-const createTransferSchema = z
+export const createTransferSchema = z
   .object({
     chunkSize: z
       .number()
