@@ -25,14 +25,18 @@ const objectStorage = new R2ObjectStorage({
   bucketName: env.R2_BUCKET_NAME,
 });
 
-const transferService = new TransferService(
-  new DrizzleTransferRepository(db),
-  objectStorage,
-  new BunPasswordHasher(),
-  new SystemClock(),
-  new SecureIdGenerator(),
-  objectStorage,
-);
+const transferService = new TransferService({
+  repository: new DrizzleTransferRepository(db),
+  uploadSigner: objectStorage,
+  downloadSigner: objectStorage,
+  objectInspector: objectStorage,
+  passwordHasher: new BunPasswordHasher(),
+  clock: new SystemClock(),
+  ids: new SecureIdGenerator(),
+  logger: logger.child({
+    component: "transfer-service",
+  }),
+});
 
 const app = createApp({
   service: transferService,

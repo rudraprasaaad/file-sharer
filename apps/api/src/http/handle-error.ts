@@ -1,6 +1,8 @@
 import { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import {
+  FileNotFoundError,
+  InvalidPasswordError,
   TransferExpiredError,
   TransferNotFoundError,
   TransferStateConflictError,
@@ -49,6 +51,26 @@ export function createErrorHandler(logger: Logger): ErrorHandler<AppEnv> {
           message: "Transfer is not in a state that allows this",
         },
         409,
+      );
+    }
+
+    if (error instanceof InvalidPasswordError) {
+      return c.json(
+        {
+          error: "invalid_password",
+          message: "Password missing or incorrect",
+        },
+        401,
+      );
+    }
+
+    if (error instanceof FileNotFoundError) {
+      return c.json(
+        {
+          error: "file_not_found",
+          message: "File not found",
+        },
+        404,
       );
     }
 
