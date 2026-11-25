@@ -4,7 +4,7 @@ import { IdGenerator } from "../interfaces/id-generator";
 import { PasswordHasher } from "../interfaces/password-hasher";
 import { TransferRepository } from "../interfaces/transfer-repository";
 import { UploadUrlSigner } from "../interfaces/upload-url-signer";
-import { TransferFile } from "../domain/transfer";
+import { Transfer, TransferFile } from "../domain/transfer";
 import { chunkKey, chunkKeys, filePrefix } from "../domain/chunk-key";
 import {
   TransferExpiredError,
@@ -15,8 +15,22 @@ import {
 import { isExpired } from "../domain/is-expired";
 import { ObjectInspector } from "../interfaces/object-inspector";
 import { expectedChunkSizes } from "../domain/expected-chunk-sizes";
+import { DownloadUrlSigner } from "../interfaces/download-url-signer";
+import { Logger } from "../interfaces/logger";
 
 const UPLOAD_URL_TTL_SECONDS = 6 * 60 * 60;
+const DOWNLOAD_URL_TTL_SECONDS = 60 * 60;
+
+export interface TransferServiceDependencies {
+  readonly repository: TransferRepository;
+  readonly uploadSigner: UploadUrlSigner;
+  readonly downloadSigner: DownloadUrlSigner;
+  readonly objectInspector: ObjectInspector;
+  readonly passwordHasher: PasswordHasher;
+  readonly clock: Clock;
+  readonly ids: IdGenerator;
+  readonly logger: Logger;
+}
 
 export interface CreateTransferResult {
   readonly transferId: string;
@@ -33,14 +47,25 @@ export interface CompleteTransferResult {
 }
 
 export class TransferService {
-  constructor(
-    private readonly repository: TransferRepository,
-    private readonly uploadSigner: UploadUrlSigner,
-    private readonly passwordHasher: PasswordHasher,
-    private readonly clock: Clock,
-    private readonly ids: IdGenerator,
-    private readonly objectInspector: ObjectInspector,
-  ) {}
+  private readonly repository: TransferRepository;
+  private readonly uploadSigner: UploadUrlSigner;
+  private readonly downloadSigner: DownloadUrlSigner;
+  private readonly objectInspector: ObjectInspector;
+  private readonly passwordHasher: PasswordHasher;
+  private readonly clock: Clock;
+  private readonly ids: IdGenerator;
+  private logger: Logger;
+
+  constructor(deps: TransferServiceDependencies) {
+    this.repository = deps.repository;
+    this.uploadSigner = deps.uploadSigner;
+    this.downloadSigner = deps.downloadSigner;
+    this.objectInspector = deps.objectInspector;
+    this.passwordHasher = deps.passwordHasher;
+    this.clock = deps.clock;
+    this.ids = deps.ids;
+    this.logger = deps.logger;
+  }
 
   async create(input: CreateTransferInput): Promise<CreateTransferResult> {
     const now = this.clock.now();
@@ -173,5 +198,33 @@ export class TransferService {
 
       throw new UploadIncompleteError(file.id, shown);
     }
+  }
+
+  async getPublicInfo(transferId: string): Promise<{
+    passwordRequired: boolean;
+    expiresAt: Date;
+  }> {
+    const transfer = await this.loadDownloadable(transferId);
+    return {
+      passwordRequired: transfer.passwordHash !== null,
+      expiresAt: transfer.expiresAt,
+    };
+  }
+
+  private async loadDownloadable(
+    transferId: string,
+    now: Date = this.clock.now(),
+  ): Promise<Transfer> {
+    const transfer = await this.repository.findById(transferId);
+
+    if (transfer === null || transfer.status === "pending") {
+      throw new TransferNotFoundError(transferId);
+    }
+
+    if (transfer.status === "expired" || isExpired(transfer, now)) {
+      throw new TransferExpiredError(transferId);
+    }
+
+    return transfer;
   }
 }
