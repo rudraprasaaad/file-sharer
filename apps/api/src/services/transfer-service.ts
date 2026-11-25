@@ -7,6 +7,8 @@ import { UploadUrlSigner } from "../interfaces/upload-url-signer";
 import { Transfer, TransferFile } from "../domain/transfer";
 import { chunkKey, chunkKeys, filePrefix } from "../domain/chunk-key";
 import {
+  FileNotFoundError,
+  InvalidPasswordError,
   TransferExpiredError,
   TransferNotFoundError,
   TransferStateConflictError,
@@ -211,6 +213,59 @@ export class TransferService {
     };
   }
 
+  async openTransfer(transferId: string, password: string | undefined) {
+    const transfer = await this.loadDownloadable(transferId);
+    await this.assertPasswordAccepted(transfer, password);
+
+    this.logger.info("Transfer opened", {
+      transferId,
+      fileCount: transfer.files.length,
+    });
+  }
+
+  async getDownloadUrls(
+    transferId: string,
+    fileId: string,
+    password: string | undefined,
+  ): Promise<{
+    fileId: string;
+    downloadUrls: string[];
+  }> {
+    const now = this.clock.now();
+    const transfer = await this.loadDownloadable(transferId, now);
+
+    await this.assertPasswordAccepted(transfer, password);
+
+    const file = transfer.files.find((candidate) => candidate.id === fileId);
+    if (file === undefined) throw new FileNotFoundError(fileId);
+
+    const remainingSeconds = Math.floor(
+      (transfer.expiresAt.getTime() - now.getTime()) / 1000,
+    );
+
+    const ttlSeconds = Math.max(
+      1,
+      Math.min(DOWNLOAD_URL_TTL_SECONDS, remainingSeconds),
+    );
+
+    const downloadUrls = await this.downloadSigner.signDownloads(
+      chunkKeys(file.r2Prefix, file.chunkCount),
+      ttlSeconds,
+    );
+
+    this.logger.info("Download URLs issues", {
+      transferId,
+      fileId,
+      chunkCount: file.chunkCount,
+      ttlSeconds,
+    });
+
+    return {
+      fileId: file.id,
+      downloadUrls,
+    };
+  }
+
   private async loadDownloadable(
     transferId: string,
     now: Date = this.clock.now(),
@@ -226,5 +281,20 @@ export class TransferService {
     }
 
     return transfer;
+  }
+
+  private async assertPasswordAccepted(
+    transfer: Transfer,
+    password: string | undefined,
+  ): Promise<void> {
+    if (transfer.passwordHash === null) return;
+
+    if (password === undefined) throw new InvalidPasswordError();
+
+    const matches = await this.passwordHasher.verify(
+      password,
+      transfer.passwordHash,
+    );
+    if (!matches) throw new InvalidPasswordError();
   }
 }
