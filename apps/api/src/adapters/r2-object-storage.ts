@@ -1,4 +1,5 @@
 import {
+  GetObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
@@ -6,6 +7,7 @@ import {
 import { ObjectInspector } from "../interfaces/object-inspector";
 import { UploadUrlSigner } from "../interfaces/upload-url-signer";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { DownloadUrlSigner } from "../interfaces/download-url-signer";
 
 export interface R2Config {
   readonly accountId: string;
@@ -16,7 +18,9 @@ export interface R2Config {
 
 const CHUNK_CONTENT_TYPE = "application/octet-stream";
 
-export class R2ObjectStorage implements UploadUrlSigner, ObjectInspector {
+export class R2ObjectStorage
+  implements UploadUrlSigner, DownloadUrlSigner, ObjectInspector
+{
   private readonly client: S3Client;
   private readonly bucketName: string;
 
@@ -48,6 +52,26 @@ export class R2ObjectStorage implements UploadUrlSigner, ObjectInspector {
             Bucket: this.bucketName,
             Key: key,
             ContentType: CHUNK_CONTENT_TYPE,
+          }),
+          {
+            expiresIn: expiresInSeconds,
+          },
+        ),
+      ),
+    );
+  }
+
+  async signDownloads(
+    keys: readonly string[],
+    expiresInSeconds: number,
+  ): Promise<string[]> {
+    return Promise.all(
+      keys.map((key) =>
+        getSignedUrl(
+          this.client,
+          new GetObjectCommand({
+            Bucket: this.bucketName,
+            Key: key,
           }),
           {
             expiresIn: expiresInSeconds,
