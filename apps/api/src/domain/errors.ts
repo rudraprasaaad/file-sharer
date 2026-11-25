@@ -28,3 +28,17 @@ export class TransferStateConflictError extends Error {
     this.name = "TransferStateConflictError";
   }
 }
+
+export class InvalidPasswordError extends Error {
+  constructor() {
+    super("Password is missing or incorrect");
+    this.name = "InvalidPasswordError";
+  }
+}
+
+export class FileNotFoundError extends Error {
+  constructor(readonly fileId: string) {
+    super(`File ${fileId} not found in transfer`);
+    this.name = "FileNotFoundError";
+  }
+}
