@@ -56,7 +56,7 @@ export class TransferService {
   private readonly passwordHasher: PasswordHasher;
   private readonly clock: Clock;
   private readonly ids: IdGenerator;
-  private logger: Logger;
+  private readonly logger: Logger;
 
   constructor(deps: TransferServiceDependencies) {
     this.repository = deps.repository;
