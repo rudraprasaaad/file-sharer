@@ -42,3 +42,10 @@ export class FileNotFoundError extends Error {
     this.name = "FileNotFoundError";
   }
 }
+
+export class ObjectDeletionError extends Error {
+  constructor(readonly failedKeys: readonly string[]) {
+    super(`Failed to delete ${failedKeys.length} object(s)`);
+    this.name = "ObjectDeletionError";
+  }
+}
