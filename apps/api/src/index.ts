@@ -8,6 +8,8 @@ import { SystemClock } from "./adapters/system-clock";
 import { SecureIdGenerator } from "./adapters/secure-id-generator";
 import { createApp } from "./http/create-app";
 import { PinoLogger } from "./adapters/pino-logger";
+import { CleanupService } from "./services/cleanup-service";
+import { RepeatingJob } from "./jobs/repeating-job";
 
 const env = loadEnv();
 
@@ -25,16 +27,28 @@ const objectStorage = new R2ObjectStorage({
   bucketName: env.R2_BUCKET_NAME,
 });
 
+const transferRepository = new DrizzleTransferRepository(db);
+const clock = new SystemClock();
+
 const transferService = new TransferService({
-  repository: new DrizzleTransferRepository(db),
+  repository: transferRepository,
   uploadSigner: objectStorage,
   downloadSigner: objectStorage,
   objectInspector: objectStorage,
   passwordHasher: new BunPasswordHasher(),
-  clock: new SystemClock(),
+  clock,
   ids: new SecureIdGenerator(),
   logger: logger.child({
     component: "transfer-service",
+  }),
+});
+
+const cleanupService = new CleanupService({
+  repository: transferRepository,
+  objectDeleter: objectStorage,
+  clock,
+  logger: logger.child({
+    component: "cleanup",
   }),
 });
 
@@ -51,6 +65,19 @@ const server = Bun.serve({
 
 logger.info("API listening", { port: server.port, env: env.NODE_ENV });
 
+const cleanupJob = new RepeatingJob({
+  name: "cleanup",
+  task: async (shouldStop) => {
+    await cleanupService.runOnce(shouldStop);
+  },
+  intervalMs: env.CLEANUP_INTERVAL_SECONDS * 1000,
+  initialDelayMs: 10_000,
+  logger: logger.child({
+    component: "job",
+  }),
+});
+cleanupJob.start();
+
 let shuttingDown = false;
 
 async function shutdown(signal: string): Promise<void> {
@@ -59,6 +86,7 @@ async function shutdown(signal: string): Promise<void> {
   logger.info("Shutting down", { signal });
 
   await server.stop();
+  await cleanupJob.stop();
   await closeDb();
   process.exit(0);
 }
