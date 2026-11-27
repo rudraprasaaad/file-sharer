@@ -12,6 +12,7 @@ const envSchema = z.object({
     .enum(["development", "production", "test"])
     .default("development"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  CLEANUP_INTERVAL_SECONDS: z.coerce.number().int().positive().default(300),
 });
 
 export type Env = z.infer<typeof envSchema>;
