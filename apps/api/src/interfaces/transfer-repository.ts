@@ -5,9 +5,9 @@ export interface TransferRepository {
 
   findById(id: string): Promise<Transfer | null>;
 
-  findExpired(now: Date): Promise<Transfer[]>;
-
   delete(id: string): Promise<void>;
 
   markActive(id: string): Promise<boolean>;
+
+  findExpired(now: Date, limit: number): Promise<Transfer[]>;
 }

@@ -1,5 +1,6 @@
 import {
   and,
+  asc,
   eq,
   files,
   inArray,
@@ -70,13 +71,15 @@ export class DrizzleTransferRepository implements TransferRepository {
     return updated.length > 0;
   }
 
-  async findExpired(now: Date): Promise<Transfer[]> {
-    const rows = await this.db
+  async findExpired(now: Date, limit: number): Promise<Transfer[]> {
+    const transferRows = await this.db
       .select()
       .from(transfers)
-      .where(lte(transfers.expiresAt, now));
+      .where(lte(transfers.expiresAt, now))
+      .orderBy(asc(transfers.expiresAt))
+      .limit(limit);
 
-    if (rows.length === 0) return [];
+    if (transferRows.length === 0) return [];
 
     const fileRows = await this.db
       .select()
@@ -84,18 +87,20 @@ export class DrizzleTransferRepository implements TransferRepository {
       .where(
         inArray(
           files.transferId,
-          rows.map((row) => row.id),
+          transferRows.map((row) => row.id),
         ),
       );
 
-    const fileByTransfer = new Map<string, FileRow[]>();
+    const filesByTransfer = new Map<string, FileRow[]>();
     for (const fileRow of fileRows) {
-      const list = fileByTransfer.get(fileRow.transferId) ?? [];
-      list.push(fileRow);
-      fileByTransfer.set(fileRow.transferId, list);
+      const list = filesByTransfer.get(fileRow.transferId);
+      if (list) list.push(fileRow);
+      else filesByTransfer.set(fileRow.transferId, [fileRow]);
     }
 
-    return rows.map((row) => toTransfer(row, fileByTransfer.get(row.id) ?? []));
+    return transferRows.map((row) =>
+      toTransfer(row, filesByTransfer.get(row.id) ?? []),
+    );
   }
 
   async delete(id: string): Promise<void> {
