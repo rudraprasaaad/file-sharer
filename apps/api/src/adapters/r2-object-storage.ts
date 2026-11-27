@@ -1,4 +1,5 @@
 import {
+  DeleteObjectsCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -8,6 +9,8 @@ import { ObjectInspector } from "../interfaces/object-inspector";
 import { UploadUrlSigner } from "../interfaces/upload-url-signer";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { DownloadUrlSigner } from "../interfaces/download-url-signer";
+import { ObjectDeleter } from "../interfaces/object-deleter";
+import { ObjectDeletionError } from "../domain/errors";
 
 export interface R2Config {
   readonly accountId: string;
@@ -17,9 +20,10 @@ export interface R2Config {
 }
 
 const CHUNK_CONTENT_TYPE = "application/octet-stream";
+const MAX_KEYS_PER_DELETE_REQUEST = 1000;
 
 export class R2ObjectStorage
-  implements UploadUrlSigner, DownloadUrlSigner, ObjectInspector
+  implements UploadUrlSigner, DownloadUrlSigner, ObjectInspector, ObjectDeleter
 {
   private readonly client: S3Client;
   private readonly bucketName: string;
@@ -107,5 +111,34 @@ export class R2ObjectStorage
     } while (continuationToken !== undefined);
 
     return sizes;
+  }
+
+  async deleteObjects(keys: readonly string[]): Promise<void> {
+    const failedKeys: string[] = [];
+
+    for (
+      let start = 0;
+      start < keys.length;
+      start += MAX_KEYS_PER_DELETE_REQUEST
+    ) {
+      const batch = keys.slice(start, start + MAX_KEYS_PER_DELETE_REQUEST);
+
+      const response = await this.client.send(
+        new DeleteObjectsCommand({
+          Bucket: this.bucketName,
+          Delete: {
+            Objects: batch.map((Key) => ({ Key })),
+            Quiet: true,
+          },
+        }),
+      );
+
+      for (const failure of response.Errors ?? []) {
+        if (failure.Code === "NoSuchKey") continue;
+        failedKeys.push(failure.Key ?? "(unknown key)");
+      }
+    }
+
+    if (failedKeys.length > 0) throw new ObjectDeletionError(failedKeys);
   }
 }
