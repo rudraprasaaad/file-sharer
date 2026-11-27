@@ -28,4 +28,4 @@ export function createDb(connectionString: string) {
 export type Database = ReturnType<typeof createDb>["db"];
 
 export * from "./schema";
-export { and, eq, inArray, lte } from "drizzle-orm";
+export { and, asc, eq, inArray, lte } from "drizzle-orm";
